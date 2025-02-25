@@ -18,7 +18,17 @@ public class JwtFactory(IOptions<JwtOptions> options) : IAccessTokenFactory
 
     public string GenerateTokenForExternalUser(string oAuthId, string externalProvider)
     {
-        throw new NotImplementedException();
+        List<Claim> claims = [new Claim(ClaimTypes.NameIdentifier, oAuthId)];
+        var token = GenerateToken(claims);
+        
+        var jwt = new JwtSecurityToken(
+            issuer: options.Value.JwtIssuer,
+            audience: options.Value.JwtAudience,
+            claims: claims,
+            expires: DateTime.UtcNow.AddDays(options.Value.LifeTime),
+            signingCredentials: new SigningCredentials(options.Value.SymmetricSecurityKey, SecurityAlgorithms.HmacSha256));
+            
+        return new JwtSecurityTokenHandler().WriteToken(jwt);
     }
 
     private string GenerateToken(IEnumerable<Claim> claims)

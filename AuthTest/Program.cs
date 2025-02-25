@@ -8,8 +8,11 @@ using Microsoft.AspNetCore.Authentication.OAuth;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -47,36 +50,39 @@ builder.Services.AddControllers();
 
 
 builder.Services.AddAuthentication()
-    .AddVkontakte("VK", opt =>
+    .AddVkontakte("vk", opt =>
     {
         var googleAuth = builder.Configuration.GetSection("OAuth:VK");
         opt.ClientId = googleAuth["AppId"];
         opt.ClientSecret = googleAuth["AppSecret"];
-        //opt.CallbackPath = new PathString("/auth/vk");
+        opt.CallbackPath = new PathString("/auth/vk");
         opt.SignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+
+
+        opt.CorrelationCookie = new CookieBuilder()
+        {
+            HttpOnly = true, Expiration = TimeSpan.FromSeconds(30), MaxAge = TimeSpan.FromSeconds(30), SecurePolicy = CookieSecurePolicy.Always
+        };
         
         opt.Fields.Add("uid");
-        // opt.Fields.Add("first_name");
-        // opt.Fields.Add("last_name");
-        //
-        // // In this case email will return in OAuthTokenResponse, 
-        // // but all scope values will be merged with user response
-        // // so we can claim it as field
+
          opt.ClaimActions.MapJsonKey(ClaimTypes.NameIdentifier, "uid");
-        // opt.ClaimActions.MapJsonKey(ClaimTypes.GivenName, "first_name");
-        // opt.ClaimActions.MapJsonKey(ClaimTypes.Surname, "last_name");
-        //
         opt.SaveTokens = true;
-        // opt.Events = new OAuthEvents
-        // {
-        //     OnCreatingTicket = context =>
-        //     {
-        //         context.RunClaimActions(context.TokenResponse.Response.RootElement);
-        //         return Task.CompletedTask;
-        //     },
-        // };
     })
-    .AddCookie();
+    .AddCookie()    
+    .AddOpenIdConnect(OpenIdConnectDefaults.AuthenticationScheme, options =>
+    {
+        options.Authority = builder.Configuration["OAuth:Keycloak:Authority"];
+        options.ClientId = builder.Configuration["OAuth:Keycloak:ClientId"];
+        options.ClientSecret = builder.Configuration["OAuth:Keycloak:ClientSecret"];
+        options.ResponseType = OpenIdConnectResponseType.Code;
+        options.SignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+        options.SaveTokens = true;
+        options.GetClaimsFromUserInfoEndpoint = false;
+        options.CallbackPath = new PathString("/signin-oidc");
+        options.RequireHttpsMetadata = false;
+        //options.Configuration = new OpenIdConnectConfiguration();
+    });
 
 var jwtOptions = builder.Configuration.GetSection(JwtOptions.JwtSection).Get<JwtOptions>();
 builder.Services.Configure<JwtOptions>(options => 
